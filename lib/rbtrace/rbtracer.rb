@@ -49,11 +49,12 @@ class RBTracer
     FileUtils.chmod 0666, socket_path
     at_exit { clean_socket_path }
 
+    external_pid = get_msgq_pid(@pid)
     5.times do
       signal
       sleep 0.15 # wait for process to create msgqs
 
-      @qo = MsgQ.msgget(-@pid, 0666)
+      @qo = MsgQ.msgget(-external_pid, 0666)
 
       break if @qo > -1
     end
@@ -91,6 +92,26 @@ class RBTracer
     attach
   end
 
+  # Under linux if not in container?
+  # outside container, process has pid 14640
+  # $ cat /proc/14640/sched | head -1
+  # bash (14640, #threads: 1)
+
+  # if inside container?, within container same process has pid 1
+  # # cat /proc/1/sched | head -1
+  # bash (14640, #threads: 1)
+  def get_external_pid(pid)
+    begin
+      external_pid=File.foreach("/proc/#{pid}/sched").first.match(/[(](\d+)[,]/)[1].to_i
+    rescue Errno::ENOENT
+      pid
+    end
+  end
+ 
+  def get_msgq_pid(pid)
+    RUBY_PLATFORM =~ /linux/ ? get_external_pid(pid) : pid
+  end
+ 
   def socket_path
     "/tmp/rbtrace-#{@pid}.sock"
   end
