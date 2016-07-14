@@ -14,6 +14,7 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -803,17 +804,37 @@ rbtracer_watch(uint32_t threshold, bool cpu_time)
   }
 }
 
+static int
+get_msgq_key(pid_t pid)
+{
+#ifndef __linux__
+  return(pid);
+#else
+  char buffer[128];
+  int status;
+  struct stat buf;
+  snprintf(buffer, 128, "/proc/%d", pid);
+  memset(&buf, 0, sizeof(buf));
+  status = stat(buffer, &buf);
+  if (status == 0) {
+    return(buf.st_ino);
+  }
+  return(pid);
+#endif
+}
+
 static void
 msgq_teardown()
 {
   pid_t pid = getpid();
+  int key = get_msgq_key(pid);
 
   if (rbtracer.mqo_fd != -1) {
     close(rbtracer.mqo_fd);
     rbtracer.mqo_fd = -1;
   }
 
-  if (rbtracer.mqi_id != -1 && rbtracer.mqi_key == (key_t)-pid) {
+  if (rbtracer.mqi_id != -1 && rbtracer.mqi_key == (key_t)-key) {
     msgctl(rbtracer.mqi_id, IPC_RMID, NULL);
     rbtracer.mqi_id = -1;
     rbtracer.mqi_key = 0;
@@ -831,8 +852,9 @@ msgq_setup()
 {
   pid_t pid = getpid();
   int val;
+  int key = get_msgq_key(pid);
 
-  if (rbtracer.mqi_key != (key_t)-pid ||
+  if (rbtracer.mqi_key != (key_t)-key ||
       rbtracer.mqo_fd  == -1) {
     msgq_teardown();
   } else {
@@ -840,7 +862,7 @@ msgq_setup()
   }
 
 
-  rbtracer.mqi_key = (key_t) -pid;
+  rbtracer.mqi_key = (key_t) -key;
   rbtracer.mqi_id  = msgget(rbtracer.mqi_key, 0666 | IPC_CREAT);
 
   if (rbtracer.mqi_id == -1)
