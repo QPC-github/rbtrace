@@ -26,12 +26,17 @@ class RBTraceCLI
     end
   end
 
-  # Look for any message queues pairs (pid/-pid) that no longer have an
+  # Look for any message queues pairs (key/-key) that no longer have an
   # associated process alive, and remove them.
   #
   # Returns nothing.
   def self.cleanup_queues
-    if (pids = `ps ax -o pid`.split("\n").map{ |p| p.strip.to_i }).any?
+    if RUBY_PLATFORM =~ /linux/
+      keys = `stat -c "%i" /proc/[0-9]*`.split.map { |p| p.strip.to_i }
+    else
+      keys = `ps ax -o pid`.split("\n").map { |p| p.strip.to_i }
+    end
+    if keys.any?
       ipcs = `ipcs -q`.split("\n").grep(/^(q|0x)/).map{ |line| line[/(0x[a-f0-9]+)/,1] }
       ipcs.each do |ipci|
         next if ipci.match(/^0xf/)
@@ -40,7 +45,7 @@ class RBTraceCLI
         qo = 0xffffffff - qi + 1
         ipco = "0x#{qo.to_s(16)}"
 
-        if ipcs.include?(ipco) and !pids.include?(qi)
+        if ipcs.include?(ipco) and !keys.include?(qi)
           STDERR.puts "*** removing stale message queue pair: #{ipci}/#{ipco}"
           system("ipcrm -Q #{ipci} -Q #{ipco}")
         end
