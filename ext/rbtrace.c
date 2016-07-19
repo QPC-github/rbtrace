@@ -808,18 +808,18 @@ static int
 get_msgq_key(pid_t pid)
 {
 #ifndef __linux__
-  return(pid);
+  return pid;
 #else
-  char buffer[128];
+  char buffer[32];
   int status;
   struct stat buf;
-  snprintf(buffer, 128, "/proc/%d", pid);
+  snprintf(buffer, 32, "/proc/%d", pid);
   memset(&buf, 0, sizeof(buf));
   status = stat(buffer, &buf);
   if (status == 0) {
-    return(buf.st_ino);
+    return buf.st_ino;
   }
-  return(pid);
+  return 0;
 #endif
 }
 

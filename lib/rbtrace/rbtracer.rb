@@ -96,7 +96,7 @@ class RBTracer
     begin
       key=File.stat("/proc/#{pid}").ino.to_i
     rescue Errno::ENOENT
-      pid
+      0
     end
   end
  
