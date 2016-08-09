@@ -49,11 +49,12 @@ class RBTracer
     FileUtils.chmod 0666, socket_path
     at_exit { clean_socket_path }
 
+    msgq_key = get_msgq_key(@pid)
     5.times do
       signal
       sleep 0.15 # wait for process to create msgqs
 
-      @qo = MsgQ.msgget(-@pid, 0666)
+      @qo = MsgQ.msgget(-msgq_key, 0666)
 
       break if @qo > -1
     end
@@ -91,6 +92,18 @@ class RBTracer
     attach
   end
 
+  def get_unique_key(pid)
+    begin
+      key=File.stat("/proc/#{pid}").ino.to_i
+    rescue Errno::ENOENT
+      0
+    end
+  end
+ 
+  def get_msgq_key(pid)
+    RUBY_PLATFORM =~ /linux/ ? get_unique_key(pid) : pid
+  end
+ 
   def socket_path
     "/tmp/rbtrace-#{@pid}.sock"
   end
